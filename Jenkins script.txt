@@ -1,0 +1,80 @@
+def gitRepos = ['https://github.com/markocrnic/user-management-API.git', 'https://github.com/markocrnic/planthealthcare-gateway.git', 'https://github.com/markocrnic/notification-scheduler.git', 
+'https://github.com/markocrnic/user-API.git','https://github.com/markocrnic/flower-API.git', 'https://github.com/markocrnic/user2flower.git', 'https://github.com/CoviloMilos/phc-users.git',
+'https://github.com/CoviloMilos/phc-admin.git', 'https://github.com/CoviloMilos/phc-wrapper.git', 'https://github.com/markocrnic/email-sender-API.git']
+def appNames = ['user-management-api', 'planthealthcare-gateway', 'notification-scheduler', 'user-api', 'flower-api', 'user2flower', 'phc-users', 'phc-admin', 'phc-wrapper', 'email-sender-api']
+def projectName = 'planthealthcareproject'
+
+pipeline {
+  agent any
+    stages {
+        stage('Cleanup') {
+          steps {
+              script {
+                  openshift.withCluster() {
+                      openshift.withProject() {
+                          appNames.each { item ->
+                            sh 'oc delete all --selector app=' + item + ' -n ' + projectName
+                          }
+                      }
+                  }
+              }
+          }
+        }
+        stage('Deploy') {
+          steps {
+            script {
+                openshift.withCluster() {
+                    openshift.withProject() {
+                        gitRepos.each { item ->
+                            sh 'oc new-app ' + item + ' -n ' + projectName
+                        }
+                      }
+                  }
+              }
+          }
+        }
+        stage('Expose a route') {
+          steps {
+            script {
+                openshift.withCluster() {
+                    openshift.withProject() {
+                        appNames.each { item ->
+                            sh 'oc expose service ' + item + ' -n ' + projectName
+                        }
+                      }
+                  }
+              }
+          }
+        }
+        stage('Set environment variables') {
+          steps {
+            script {
+                openshift.withCluster() {
+                    openshift.withProject() {
+                        appNames.each { item ->
+                            if (item == 'flower-api' || item == 'user-api' || item == 'user2flower') {
+                                //db + jaeger
+                                sh 'oc set env -n ' + projectName + ' dc/' + item + ' PHC_DB_HOST=postgresql-94-rhel7.' + projectName + '.svc.cluster.local'
+                                sh 'oc set env -n ' + projectName + ' dc/' + item + ' PHC_DB_NAME=planthealthcare'
+                                sh 'oc set env -n ' + projectName + ' dc/' + item + ' PHC_DB_PASSWORD=postgres'
+                                sh 'oc set env -n ' + projectName + ' dc/' + item + ' PHC_DB_PORT=5432'
+                                sh 'oc set env -n ' + projectName + ' dc/' + item + ' PHC_DB_USER=postgres'
+                                sh 'oc set env -n ' + projectName + ' dc/' + item + ' PHC_JAEGER_HOST=jaeger-agent.' + projectName + '.svc.cluster.local'
+                                sh 'oc set env -n ' + projectName + ' dc/' + item + ' PHC_JAEGER_NAME=planthealthcare'
+                                sh 'oc set env -n ' + projectName + ' dc/' + item + ' PHC_JAEGER_PORT=5775'
+                            }
+                            else if (item == 'notification-scheduler' || item == 'planthealthcare-gateway' || item == 'user-management-api') {
+                                //jaeger + api paths
+                                sh 'oc set env -n ' + projectName + ' dc/' + item + ' PHC_JAEGER_HOST=jaeger-agent.' + projectName + '.svc.cluster.local'
+                                sh 'oc set env -n ' + projectName + ' dc/' + item + ' PHC_JAEGER_NAME=planthealthcare'
+                                sh 'oc set env -n ' + projectName + ' dc/' + item + ' PHC_JAEGER_PORT=5775'
+                                sh 'oc set env -n ' + projectName + ' dc/' + item + ' PHC_API_PATHS=\'{"users": "http://user-api.' + projectName + '.svc.cluster.local:5000/","flowers": "http://flower-api.' + projectName + '.svc.cluster.local:5000/","users2flowers": "http://user2flower.' + projectName + '.svc.cluster.local:5000/","usermanagement": "http://user-management-api.' + projectName + '.svc.cluster.local:5000/","sendEmail": "http://email-sender-api.' + projectName + '.svc.cluster.local:8080/","notificationscheduler": "http://notification-scheduler.' + projectName + '.svc.cluster.local:5000/"}\''
+                            }
+                        }
+                      }
+                  }
+              }
+          }
+        }
+    }
+}
