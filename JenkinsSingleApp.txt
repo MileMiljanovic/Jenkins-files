@@ -56,7 +56,7 @@ pipeline {
                                 sh 'oc set env -n ' + projectName + ' dc/' + appName + ' PHC_JAEGER_NAME=planthealthcare'
                                 sh 'oc set env -n ' + projectName + ' dc/' + appName + ' PHC_JAEGER_PORT=5775'
 
-                        }
+                        
                       }
                   }
               }
