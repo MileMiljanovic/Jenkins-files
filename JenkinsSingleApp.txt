@@ -1,0 +1,66 @@
+def gitRepo = 'https://github.com/markocrnic/flower-API.git'
+def appName = 'flower-api'
+def projectName = 'planthealthcareproject'
+
+pipeline {
+  agent any
+    stages {
+        stage('Cleanup') {
+          steps {
+              script {
+                  openshift.withCluster() {
+                      openshift.withProject() {                         
+                        sh 'oc delete all --selector app=' + appName + ' -n ' + projectName                        
+                      }
+                  }
+              }
+          }
+        }
+        stage('Deploy') {
+          steps {
+            script {
+                openshift.withCluster() {
+                    openshift.withProject() {
+                        sh 'oc new-app ' + gitRepo + ' -n ' + projectName
+                    
+                      }
+                  }
+              }
+          }
+        }
+        stage('Expose a route') {
+          steps {
+            script {
+                openshift.withCluster() {
+                    openshift.withProject() {
+                            sh 'oc expose service ' + appName + ' -n ' + projectName
+                        
+                      }
+                  }
+              }
+          }
+        }
+        stage('Set environment variables') {
+          steps {
+            script {
+                openshift.withCluster() {
+                    openshift.withProject() {
+
+
+                                sh 'oc set env -n ' + projectName + ' dc/' + appName + ' PHC_DB_HOST=postgresql-94-rhel7.' + projectName + '.svc.cluster.local'
+                                sh 'oc set env -n ' + projectName + ' dc/' + appName + ' PHC_DB_NAME=planthealthcare'
+                                sh 'oc set env -n ' + projectName + ' dc/' + appName + ' PHC_DB_PASSWORD=postgres'
+                                sh 'oc set env -n ' + projectName + ' dc/' + appName + ' PHC_DB_PORT=5432'
+                                sh 'oc set env -n ' + projectName + ' dc/' + appName + ' PHC_DB_USER=postgres'
+                                sh 'oc set env -n ' + projectName + ' dc/' + appName + ' PHC_JAEGER_HOST=jaeger-agent.' + projectName + '.svc.cluster.local'
+                                sh 'oc set env -n ' + projectName + ' dc/' + appName + ' PHC_JAEGER_NAME=planthealthcare'
+                                sh 'oc set env -n ' + projectName + ' dc/' + appName + ' PHC_JAEGER_PORT=5775'
+
+                        }
+                      }
+                  }
+              }
+          }
+        }
+    }
+}
