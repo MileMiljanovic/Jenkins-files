@@ -1,0 +1,26 @@
+def appName = 'sdlctest'
+def projectName = 'lemi-test-spring'
+def gitRepo = 'https://github.com/MileMiljanovic/SDLCtest.git'
+def image = 'registry.access.redhat.com/redhat-openjdk-18/openjdk18-openshift'
+
+pipeline {
+  agent any
+    stages {
+        stage('Build/deploy') {
+          steps {
+              script {
+                  openshift.withCluster() {
+                      openshift.withProject("${projectName}") {
+                        if(openshift.selector("bc", appName).exists()) {
+                            sh 'oc start-build ' + appName + ' -n ' + projectName  
+                        }
+                        else {
+                            sh 'oc new-app ' + image + '~' + gitRepo + ' -n ' + projectName + ' --context-dir=hello'
+                        }
+                      }
+                  }
+              }
+          }
+        }
+    }
+}
